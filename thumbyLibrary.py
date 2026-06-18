@@ -17,11 +17,11 @@ class Ptr8:
 def ptr8(obj):
     return Ptr8(obj)
 
-inputState = 0
+inputState = 1
 buttonInputs = [
     [
-        pygame.K_s,
-        pygame.K_a,
+        pygame.K_c,
+        pygame.K_x,
         pygame.K_UP,
         pygame.K_DOWN,
         pygame.K_LEFT,
@@ -29,12 +29,12 @@ buttonInputs = [
     ],
 
     [
+        pygame.K_k,
+        pygame.K_l,
         pygame.K_w,
-        pygame.K_q,
-        pygame.K_u,
-        pygame.K_j,
-        pygame.K_h,
-        pygame.K_k
+        pygame.K_s,
+        pygame.K_a,
+        pygame.K_d
     ],
 
     [

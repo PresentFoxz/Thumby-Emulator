@@ -2,8 +2,8 @@ import micropython
 import random
 import bType
 import library as lib
-from math import *
 from thumbySaves import saveData
+from math import *
 
 BIOMES = {
     0: {
@@ -52,16 +52,21 @@ class Entities:
 
         self.jump_ai = 0
         self.move_dir_ai = 0
+
+        self.plrState = 0
+        self.cursorX = 0
+        self.cursorY = 0
     
     @micropython.native
     def movement(self, btn):
+        if btn.buttonB.pressed():
+            self.plrState ^= 1
+
+        
         if btn.buttonL.pressed():
             self.vx -= self.acc
         if btn.buttonR.pressed():
             self.vx += self.acc
-        
-        self.vx *= self.frict
-        self.vy += self.grav
 
         if (self.ground or self.coyT < 10) and btn.buttonA.pressed():
             self.coyT = 10
@@ -69,6 +74,9 @@ class Entities:
             
             self.vy = -self.jump - abs(self.vx / 2)
             self.ground = False
+        
+        self.vx *= self.frict
+        self.vy += self.grav
         
         if self.vy == self.maxY:
             self.vy = self.maxY
@@ -95,9 +103,6 @@ class Entities:
         elif self.move_dir_ai == -1:
             self.vx -= self.acc
 
-        self.vx *= self.frict
-        self.vy += self.grav
-
         if (self.ground or self.coyT < 10) and self.jump_ai == 1:
             self.coyT = 10
             self.vx *= 1.5
@@ -105,6 +110,9 @@ class Entities:
             self.vy = -self.jump - abs(self.vx / 3)
             self.ground = False
         
+        self.vx *= self.frict
+        self.vy += self.grav
+
         if self.vy == self.maxY:
             self.vy = self.maxY
         
@@ -187,8 +195,6 @@ class WorldData:
     @staticmethod
     @micropython.native
     def saveChunks(_, chunk, entities):
-        print(f"Chunk: {_}")
-
         chunkEnts = []
         entRemove = []
         for idx, ent in enumerate(entities):
@@ -203,7 +209,6 @@ class WorldData:
 
         saveData.setItem("Chunks", chunk[0])
         if len(chunkEnts) > 0:
-            print("Entities found")
             saveData.setItem("Entities", chunkEnts)
 
         saveData.save()
@@ -342,7 +347,7 @@ class WorldData:
     
     @staticmethod
     @micropython.native
-    def generateWorld(worldChunks, entities, px, py, save):
+    def generateWorld(worldChunks, entities, px, py, save, load):
         chunk_cube_w = lib.CHUNK_CUBE_W
         chunk_cube_h = lib.CHUNK_CUBE_H
     
@@ -400,11 +405,11 @@ class WorldData:
             chunk[1] = cx
             chunk[2] = cy
 
-            loaded = WorldData.loadChunks(cx, cy, _, chunk, entities)
-            if loaded:
-                continue
-
-            print("Build Chunk")
+            if load:
+                loaded = WorldData.loadChunks(cx, cy, _, chunk, entities)
+                if loaded:
+                    continue
+            
             chunk[0] = bytearray(lib.CHUNK_SIZE)
     
             chunk_world_x = cx * chunk_cube_w
