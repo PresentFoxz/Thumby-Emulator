@@ -1,0 +1,2 @@
+cd C:\Users\vcapr\Downloads\Thumby Emulator
+py -3.12 launcher.py
