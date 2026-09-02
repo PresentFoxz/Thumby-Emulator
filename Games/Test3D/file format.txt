@@ -1,0 +1,3 @@
+/Module/Foxgine/classes.py
+/Module/Foxgine/library.py
+/Module/Foxgine/model.obj

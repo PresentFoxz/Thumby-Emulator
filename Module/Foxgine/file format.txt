@@ -2,4 +2,3 @@
 /Games/Foxgine/classes.py
 /Games/Foxgine/library.py
 /Games/Foxgine/models/cube.obj
-/Games/Foxgine/models/ball.obj

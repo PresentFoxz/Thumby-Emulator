@@ -1,0 +1,32 @@
+v 1 1 0
+v 1 0 0
+v 1 1 1
+v 1 0 1
+v 0 1 0
+v 0 0 0
+v 0 1 1
+v 0 0 1
+
+# -X face (visible[5])
+f 6 4 5 2
+f 5 7 6 2
+
+# +X face (visible[4])
+f 0 3 1 2
+f 0 2 3 2
+
+# -Y face (visible[3])
+f 5 1 7 3
+f 1 3 7 3
+
+# +Y face (visible[2])
+f 4 2 0 3
+f 4 6 2 3
+
+# -Z face (visible[1])
+f 4 0 1 1
+f 4 1 5 1
+
+# +Z face (visible[0])
+f 2 7 3 1
+f 2 6 7 1

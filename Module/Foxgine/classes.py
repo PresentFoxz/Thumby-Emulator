@@ -11,9 +11,6 @@ cH = lib.h_Half << lib.FIXED_BITS
 sprtID = 0
 triID  = 0
 
-transformed = [None] * (lib.MAX_TRIS * 3)
-projected   = [None] * (lib.MAX_TRIS * 3)
-
 yaw, pitch = None, None
 sinY, cosY, sinX, cosX = None, None, None, None
 
@@ -81,6 +78,9 @@ class Camera:
                 
                 if btn.buttonL.pressed(): self.ry -= self.rot_y
                 if btn.buttonR.pressed(): self.ry += self.rot_y
+
+                if self.rx > lib.FMath.TO_FIXED_BITS(68): self.rx = lib.FMath.TO_FIXED_BITS(68)
+                if self.rx < lib.FMath.TO_FIXED_BITS(-68): self.rx = lib.FMath.TO_FIXED_BITS(-68)
             else:
                 if btn.buttonU.pressed():
                     self.xVel += lib.FMath.FIXED_MUL(self.acc, sinY)
@@ -143,15 +143,29 @@ class Render:
     @micropython.native
     def insertion_sort(depths, count):
         for i in range(1, count):
-            key = depths[i][:]
-            if (key[1] == -1): continue
+            base = i * 3
+
+            keyZ     = depths[base]
+            keyState = depths[base + 1]
+            keyID    = depths[base + 2]
+            if keyState == -1: continue
             
             j = i - 1
-            while j >= 0 and depths[j][0] < key[0]:
-                depths[j + 1] = depths[j]
+            while j >= 0:
+                jb = j * 3
+                if depths[jb] >= keyZ: break
+
+                nb = (j + 1) * 3
+
+                depths[nb]     = depths[jb]
+                depths[nb + 1] = depths[jb + 1]
+                depths[nb + 2] = depths[jb + 2]
                 j -= 1
-    
-            depths[j + 1] = key
+            
+            dst = (j + 1) * 3
+            depths[dst]     = keyZ
+            depths[dst + 1] = keyState
+            depths[dst + 2] = keyID
     
     @micropython.viper
     def h_dither_line(y:int, x_start:int, x_end:int, color:int):
@@ -172,7 +186,7 @@ class Render:
         inv  = 255 - mask
         row  = page * width
         
-        color_scaled:int = (color * 16) // 3
+        color_scaled:int = int(lib.MUL_OPP(color * 16, 3))
         yb:int = (y & 3) << 2
     
         for x in range(x_start, x_end):
@@ -259,14 +273,14 @@ class Render:
     @micropython.native
     def directVerts(pos, cam, verts_out, color_out, depth_out, count, tris_data, normals, colors):
         global triID, cosX, cW, cH, sinY, cosY, sinX, cosX, forwardX, forwardY, forwardZ
-        cCount = -1
+        cCount = 0
         
         cx, cy, cz = cam.x, cam.y, cam.z
         fov, near, far = cam.fov, cam.near, cam.far
         
         vP0, vP1, vP2 = lib.FMath.TO_FIXED_BITS(pos[0]), lib.FMath.TO_FIXED_BITS(pos[1]), lib.FMath.TO_FIXED_BITS(pos[2])
         for triIDX, tri in enumerate(tris_data):
-            if triID >= lib.MAX_TRIS: break
+            if triID >= lib.MAX_TRIS or (count + cCount) >= lib.MAX_TRIS: break
             v0, v1, v2 = tri
             
             r0 = Render.worldToCam(cx, cy, cz, v0[0] + vP0, v0[1] + vP1, v0[2] + vP2, sinX, sinY, cosX, cosY)
@@ -284,11 +298,22 @@ class Render:
             if p0 is None or p1 is None or p2 is None: continue
     
             if Render.checkRend(*p0, *p1, *p2) != 0: continue
-    
-            cCount += 1
-            verts_out[triID] = [p0[0], p0[1], p1[0], p1[1], p2[0], p2[1]]
+
+            o = triID * 6
+            verts_out[o]     = p0[0]
+            verts_out[o + 1] = p0[1]
+            verts_out[o + 2] = p1[0]
+            verts_out[o + 3] = p1[1]
+            verts_out[o + 4] = p2[0]
+            verts_out[o + 5] = p2[1]
             color_out[triID] = colors[triIDX]
-            depth_out[cCount + count] = [int((r0[2] + r1[2] + r2[2]) // 3), 0, triID]
+
+            newCount = (cCount + count) * 3
+            depth_out[newCount] = lib.MUL_OPP(r0[2] + r1[2] + r2[2], 3)
+            depth_out[newCount + 1] = 0
+            depth_out[newCount + 2] = triID
+
+            cCount += 1
             triID += 1
     
         return cCount
@@ -332,9 +357,9 @@ class Render:
         dy01 = y1 - y0
         dy12 = y2 - y1
     
-        dx02 = (x2 - x0) * scale // dy02 if dy02 != 0 else 0
-        dx01 = (x1 - x0) * scale // dy01 if dy01 != 0 else 0
-        dx12 = (x2 - x1) * scale // dy12 if dy12 != 0 else 0
+        dx02 = lib.MUL_OPP((x2 - x0) * scale, dy02) if dy02 != 0 else 0
+        dx01 = lib.MUL_OPP((x1 - x0) * scale, dy01) if dy01 != 0 else 0
+        dx12 = lib.MUL_OPP((x2 - x1) * scale, dy12) if dy12 != 0 else 0
     
         interlace = lib.interlace
         xA = x0 * scale
@@ -383,13 +408,17 @@ class Render:
         if (count > 1): Render.insertion_sort(depth, count)
         
         for i in range(count):
-            z, dState, dID = depth[i]
+            d = i * 3
+
+            z      = depth[d]
+            dState = depth[d + 1]
+            dID    = depth[d + 2]
             
             if (dState == -1): 
                 break
             elif (dState == 0):
-                if verts[dID] is None or color[dID] is None: continue
-                Render.customTri(*verts[dID], color[dID], True)
+                o = dID * 6
+                Render.customTri(verts[o], verts[o + 1], verts[o + 2], verts[o + 3], verts[o + 4], verts[o + 5], color[dID], True)
             elif (dState == 1):
                 pos = sprt[dID]
                 if pos is None: continue
@@ -418,31 +447,23 @@ class Render:
                 
                 elif line.startswith("f "):
                     parts = line.split()
-                    
+
                     idxs = []
-                    
+                    faceColor = int(parts[-1])
                     def calcNormal(a, b, c):
                         ax, ay, az = b[0]-a[0], b[1]-a[1], b[2]-a[2]
                         bx, by, bz = c[0]-a[0], c[1]-a[1], c[2]-a[2]
-                        
-                        nx = ay*bz - az*by
-                        ny = az*bx - ax*bz
-                        nz = ax*by - ay*bx
-                        
-                        length = sqrt(nx*nx + ny*ny + nz*nz)
-                        nx /= length
-                        ny /= length
-                        nz /= length
-                        
-                        nx = lib.FMath.TO_FIXED_BITS(nx)
-                        ny = lib.FMath.TO_FIXED_BITS(ny)
-                        nz = lib.FMath.TO_FIXED_BITS(nz)
-                        
+
+                        nx = (ay*bz - az*by) >> lib.FIXED_BITS
+                        ny = (az*bx - ax*bz) >> lib.FIXED_BITS
+                        nz = (ax*by - ay*bx) >> lib.FIXED_BITS
+
                         return [nx, -ny, nz]
 
-                    for p in parts[1:]:
-                        if "/" in p: idx = int(p.split("/")[0]) - 1
-                        else: idx = int(p) - 1
+                    for p in parts[1:-1]:
+                        if "/" in p: idx = int(p.split("/")[0])
+                        else: idx = int(p)
+
                         idxs.append(idx)
                     
                     if len(idxs) == 3:
@@ -450,7 +471,7 @@ class Render:
                         if invert:
                             tri[1], tri[2] = tri[2], tri[1]
                         tris.append(tri)
-                        color.append(random.randint(1, 3))
+                        color.append(faceColor)
                         
                         n = calcNormal(verts[idxs[0]], verts[idxs[1]], verts[idxs[2]])
                         normals.append(n)
@@ -465,15 +486,16 @@ class Render:
                         tris.append(t1)
                         tris.append(t2)
     
-                        color.append(random.randint(1, 3))
-                        color.append(random.randint(1, 3))
+                        color.append(faceColor)
+                        color.append(faceColor)
                         
                         n1 = calcNormal(verts[t1[0]], verts[t1[1]], verts[t1[2]])
                         n2 = calcNormal(verts[t2[0]], verts[t2[1]], verts[t2[2]])
                         
                         normals.append(n1)
                         normals.append(n2)
-                    
+        
+        print("Tri Length: " + str(len(tris)) + " | Vert Length: " + str(len(verts)))
         return {
             "verts": verts,
             "tris": tris,

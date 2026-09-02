@@ -1,0 +1,10 @@
+-- MSYS2 UCRT64
+
+cd "/e/Thumby Emulator/mpy files"
+source .venv/bin/activate
+make Thumby
+
+-- Ubuntu
+
+cd "/e/Thumby Emulator/mpy files/"
+make emulator

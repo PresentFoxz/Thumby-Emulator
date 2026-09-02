@@ -1,14 +1,15 @@
-from thumbyGraphics import display
+from thumbyGraphics import display as gfx
 import thumbyButton as btn
 import sys
 import random
+from array import array
 
-modelPath = "/Games/Thunder3D"
+modelPath = "/Module/Foxgine"
 sys.path.append(modelPath)
 from classes import Entities, Camera, Render
 import library as lib
 
-display.setFPS(20)
+gfx.setFPS(20)
 sprtPos = [0.5, 1.2, 0.5]
 cam = None
 plr = None
@@ -18,17 +19,28 @@ objects     = [["cube.obj", 0]]
 entModel    = []
 blockModels = []
 
-worldVerts  = [bytearray(6) for _ in range(lib.MAX_TRIS)]
-depthBin    = [[0, -1, 0] for _ in range(lib.MAX_TRIS)]
-worldSprt   = [bytearray(2) for _ in range(lib.MAX_SPRT)]
-worldColors = [0] * lib.MAX_TRIS
+worldVerts  = None
+depthBin    = None
+worldSprt   = None
+worldColors = None
 vertCount = 0
 sprtCount = 0
 fullCount = 0
 
+CHUNK_WIDTH    = 1
+CHUNK_HEIGHT   = 1
+CHUNK_DEPTH    = 1
+CHUNK_AMT      = CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH
 
-chunkData  = [bytearray(lib.CHUNK_SIZE)] * lib.CHUNK_AMT
-chunkVerts = [None] * lib.CHUNK_AMT
+CHUNK_X  = 2
+CHUNK_Y  = 2
+CHUNK_Z  = 2
+CHUNK_SIZE   = (CHUNK_X * CHUNK_Y * CHUNK_Z)
+
+MAX_TRIS_CHUNK = (CHUNK_SIZE * 12)
+
+chunkData  = [bytearray(CHUNK_SIZE)] * CHUNK_AMT
+chunkVerts = [None] * CHUNK_AMT
 blockFace = [
     [-1,  0,  0], [1, 0, 0],
     [0, 1, 0], [0, -1, 0],
@@ -36,18 +48,26 @@ blockFace = [
 ]
 
 def initGame():
-    global cam, plr, blockModels, entModel
+    global cam, plr, loadedModels, entModel, worldVerts, depthBin, worldSprt, worldColors
     
     entModel.clear()
-    blockModels.clear()
+    loadedModels.clear()
     entIndex.clear()
     
     cam = Camera(0.0, 0.0, -4.0, 0.0, 0.0, 0.0, 0.001, 20.0, 1.12, 0.6, 120.0)
     # plr = Entities(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0)
     # entIndex.append(Entities(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0))
-    
+
     m = objects[0]
-    blockModels.append(Render.loadOBJ(modelPath + "/" + m[0], m[1]))
+    loadedModels.append(Render.loadOBJ(modelPath + "/" + m[0], m[1]))
+    print(loadedModels[0])
+
+    lib.MAX_TRIS = (len(loadedModels[0]["tris"]) * 1)
+
+    worldVerts  = array("h", [0] * (lib.MAX_TRIS * 6))
+    depthBin    = array("i", [0] * (lib.MAX_TRIS * 3))
+    worldSprt   = [bytearray(2) for _ in range(lib.MAX_SPRT)]
+    worldColors = bytearray(lib.MAX_TRIS)
 
 def addWorld(worldVerts, worldColors, depthBin, count, tris, normals, color):
     if count >= lib.MAX_TRIS: return 0
@@ -73,8 +93,8 @@ def createWorld(models, idx):
     color_data  = []
     normal_data = []
     
-    cX, cY, cZ = lib.CHUNK_X, lib.CHUNK_Y, lib.CHUNK_Z
-    cW, cH, cD = lib.CHUNK_WIDTH, lib.CHUNK_HEIGHT, lib.CHUNK_DEPTH
+    cX, cY, cZ = CHUNK_X, CHUNK_Y, CHUNK_Z
+    cW, cH, cD = CHUNK_WIDTH, CHUNK_HEIGHT, CHUNK_DEPTH
     for i in range(len(chunk)):
         data = chunk[i]
         if (data == 0): continue
@@ -126,13 +146,13 @@ def createWorld(models, idx):
     
     print(f"Block Data: {chunkData[idx]}")
     print(f"Tri Count: {len(tri_data)}")
-    return { "tris": tri_data, "normals": normal_data, "color": color_data }
+    return { "tris": tri_data, "normal": normal_data, "color": color_data }
 
 def main():
     global worldVerts, worldColors, depthBin, vertCount, sprtCount, fullCount, cam, plr, entIndex
     
     lib.FMath.init_tables()
-    lib.buf = display.buffer
+    lib.buf = gfx.display.buffer
     try:
         initGame()
         print("Initalize Game")
@@ -140,16 +160,15 @@ def main():
         print(f"Failed To Initalize: {e}")
         return
     
-    for i in range(lib.CHUNK_AMT): chunkVerts[i] = createWorld(blockModels, i)
+    for i in range(CHUNK_AMT): chunkVerts[i] = createWorld(blockModels, i)
     
     while True:
         Render.fill(0)
-        lib.buf = display.buffer
+        lib.buf = gfx.display.buffer
         
         vertCount = 0
         sprtCount = 0
         fullCount = 0
-        depthBin  = [[0, -1, 0] for _ in range(lib.MAX_TRIS)]
         
         cam.movement(btn)
         cam.updateFunctions()
@@ -158,12 +177,12 @@ def main():
         # fullCount = (vertCount + sprtCount)
         
         for model in chunkVerts:
-            vertCount += addWorld(worldVerts, worldColors, depthBin, fullCount, model["tris"], model["normals"], model["color"])
+            vertCount += addWorld(worldVerts, worldColors, depthBin, fullCount, model["tris"], model["normal"], model["color"])
             fullCount = (vertCount + sprtCount)
         
         Render.renderWorld(worldVerts, worldSprt, worldColors, depthBin, fullCount)
         
         # print(f"FullCount: {fullCount} | VertCount: {vertCount} | SprtCount: {sprtCount}")
         lib.interlace ^= 1
-        display.update()
+        gfx.update()
 main()

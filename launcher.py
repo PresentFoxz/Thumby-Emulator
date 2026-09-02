@@ -4,14 +4,31 @@ import builtins
 import importlib.util
 import thumbyLibrary as library
 
+print(sys.executable)
+
 builtins.ptr8 = library.ptr8
 
-BASE = os.path.dirname(__file__)
-LIB = os.path.join(BASE, "lib")
-SAVES = os.path.join(BASE, "Saves")
-GAMES_DIR = os.path.join(BASE, "Games")
+BASE        = os.path.dirname(__file__)
+LIB         = os.path.join(BASE, "lib")
+SAVES       = os.path.join(BASE, "Saves")
+GAMES_DIR   = os.path.join(BASE, "Games")
+MODULES_DIR = os.path.join(BASE, "Module")
 
 _real_open = builtins.open
+
+class ThumbySysPath(list):
+    def _convert(self, path):
+        if isinstance(path, str) and path.startswith("/"):
+            return os.path.join(BASE, path.lstrip("/"))
+        return path
+
+    def append(self, path):
+        super().append(self._convert(path))
+
+    def insert(self, index, path):
+        super().insert(index, self._convert(path))
+
+sys.path = ThumbySysPath(sys.path)
 
 def thumby_open(path, *args, **kwargs):
     if isinstance(path, str):
@@ -35,7 +52,9 @@ def load_game(game_file, input_type):
 
     library.inputState = input_type
 
-    sys.path = [game_dir, LIB, SAVES] + sys.path
+    for path in (game_dir, LIB, SAVES, MODULES_DIR):
+        if path not in sys.path:
+            sys.path.insert(0, path)
 
     spec = importlib.util.spec_from_file_location("game", game_file)
     module = importlib.util.module_from_spec(spec)

@@ -1,0 +1,3 @@
+LIBRARY T3D_EMU.cp314-mingw_x86_64_ucrt_gnu.pyd
+EXPORTS
+PyInit_T3D_EMU
