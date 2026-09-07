@@ -1,3 +1,4 @@
+/Games/Test3D/Test3D.py
 /Module/Foxgine/classes.py
 /Module/Foxgine/library.py
-/Module/Foxgine/model.obj
+/Module/Foxgine/models.obj

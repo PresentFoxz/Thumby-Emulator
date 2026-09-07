@@ -5,8 +5,9 @@ import random
 import micropython
 from array import array
 
-modelPath = "/Module/Foxgine"
-sys.path.append(modelPath)
+modulePath = "/Module/Foxgine"
+modelPath  = "/Games/Belory"
+sys.path.append(modulePath)
 from classes import Entities, Camera, Render
 import library as lib
 
@@ -18,50 +19,23 @@ entIndex = []
 
 objects      = [["cube.obj", 0], ["ball.obj", 0]]
 entModel     = []
-loadedModels = []
 
 worldVerts  = None
 depthBin    = None
 worldSprt   = None
 worldColors = None
+worldModels = None
 vertCount = 0
 sprtCount = 0
 fullCount = 0
 
-def initGame():
-    global cam, plr, loadedModels, entModel, worldVerts, depthBin, worldSprt, worldColors
-    
-    entModel.clear()
-    loadedModels.clear()
-    entIndex.clear()
-    
-    cam = Camera(0.0, 0.0, -4.0, 0.0, 0.0, 0.0, 0.001, 20.0, 1.12, 0.6, 120.0)
-    # plr = Entities(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0)
-    # entIndex.append(Entities(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0))
-
-    m = objects[1]
-    loadedModels.append(Render.loadOBJ(modelPath + "/" + m[0], m[1]))
-    print(loadedModels[0])
-
-    lib.MAX_TRIS = (len(loadedModels[0]["tris"]) * 1)
-
-    worldVerts  = array("h", [0] * (lib.MAX_TRIS * 6))
-    depthBin    = array("i", [0] * (lib.MAX_TRIS * 3))
-    worldSprt   = [bytearray(2) for _ in range(lib.MAX_SPRT)]
-    worldColors = bytearray(lib.MAX_TRIS)
-
 @micropython.native
-def addWorld(worldVerts, worldColors, depthBin, count, tris, normals, color):
-    if count >= lib.MAX_TRIS: return 0
-    
-    count += Render.directVerts([0, 0, 0], cam, worldVerts, worldColors, depthBin, count, tris, normals, color)
-    return count
+def convertTris(model):
+    length = len(model["tris"])
 
-@micropython.native
-def convertTris(model, x, y, z):
-    tri_data    = []
-    color_data  = []
-    normal_data = []
+    tri_data    = [0] * (length * 3)
+    color_data  = [0] * length
+    normal_data = [0] * length
 
     if (len(model["tris"]) == 0): return { "tris": tri_data, "normals": normal_data, "color": color_data } 
 
@@ -70,19 +44,50 @@ def convertTris(model, x, y, z):
     normals = model["normal"]
     color  = model["color"]
 
+    t = 0
     for f in range(len(tris)):
         t0, t1, t2 = tris[f]
         v0, v1, v2 = verts[t0], verts[t1], verts[t2]
 
-        v0 = [v0[0] + x, v0[1] - y, v0[2] + z]
-        v1 = [v1[0] + x, v1[1] - y, v1[2] + z]
-        v2 = [v2[0] + x, v2[1] - y, v2[2] + z]
+        triID = t * 3
+        tri_data[triID]     = v0
+        tri_data[triID + 1] = v1
+        tri_data[triID + 2] = v2
+        color_data[t] = color[f]
+        normal_data[t] = normals[f]
 
-        tri_data.append([v0, v1, v2])
-        color_data.append(color[f])
-        normal_data.append(normals[f])
+        t += 1
     
     return { "tris": tri_data, "normal": normal_data, "color": color_data }
+
+def initGame():
+    global cam, plr, entModel, worldVerts, depthBin, worldSprt, worldColors, worldModels
+    
+    entModel.clear()
+    entIndex.clear()
+    
+    cam = Camera(0.0, 0.0, -4.0, 0.0, 0.0, 0.0, 0.001, 20.0, 1.12, 0.6, 120.0)
+    # plr = Entities(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0)
+    # entIndex.append(Entities(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0))
+
+    worldModels = []
+    m = objects[1]
+    loadedModel = Render.loadOBJ(modelPath + "/" + m[0], m[1])
+    lib.MAX_TRIS = (len(loadedModel["tris"]) * 1)
+    worldModels.append(convertTris(loadedModel))
+
+    worldVerts  = bytearray(lib.MAX_TRIS * 6)
+    depthBin    = array("i", [0] * (lib.MAX_TRIS * 3))
+    worldSprt   = [bytearray(2) for _ in range(lib.MAX_SPRT)]
+    worldColors = bytearray(lib.MAX_TRIS)
+
+@micropython.native
+def addWorld(worldVerts, worldColors, depthBin, count, tris, normals, color, x, y, z):
+    if count >= lib.MAX_TRIS: return 0
+    
+    px, py, pz = lib.FMath.TO_FIXED_BITS(x), lib.FMath.TO_FIXED_BITS(y), lib.FMath.TO_FIXED_BITS(z)
+    count += Render.directVerts(px, py, pz, cam, worldVerts, worldColors, depthBin, count, tris, normals, color)
+    return count
 
 def main():
     global worldVerts, worldColors, depthBin, vertCount, sprtCount, fullCount, cam, plr, entIndex
@@ -110,9 +115,8 @@ def main():
         # sprtCount += Render.setupSprite(sprtPos, None, cam, None, worldSprt, depthBin, fullCount)
         # fullCount = (vertCount + sprtCount)
         
-        for model in loadedModels:
-            newModel = convertTris(model, 0, 0, 0)
-            vertCount += addWorld(worldVerts, worldColors, depthBin, fullCount, newModel["tris"], newModel["normal"], newModel["color"])
+        for model in worldModels:
+            vertCount += addWorld(worldVerts, worldColors, depthBin, fullCount, model["tris"], model["normal"], model["color"], 0, 0, 0)
             fullCount = (vertCount + sprtCount)
         
         Render.renderWorld(worldVerts, worldSprt, worldColors, depthBin, fullCount)

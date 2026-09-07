@@ -167,6 +167,7 @@ class Render:
             depths[dst + 1] = keyState
             depths[dst + 2] = keyID
     
+    @staticmethod
     @micropython.viper
     def h_dither_line(y:int, x_start:int, x_end:int, color:int):
         height = int(lib.height)
@@ -270,25 +271,48 @@ class Render:
         return 0
     
     @staticmethod
+    @micropython.viper
+    def checkBounds(x0:int, y0:int, x1:int, y1:int, x2:int, y2:int):
+        width:int  = int(lib.width)
+        height:int = int(lib.height)
+
+        if x0 < 0: x0 = 0
+        if x1 < 0: x1 = 0
+        if x2 < 0: x2 = 0
+        if x0 >= width: x0 = width - 1
+        if x1 >= width: x1 = width - 1
+        if x2 >= width: x2 = width - 1
+
+        if y0 < 0: y0 = 0
+        if y1 < 0: y1 = 0
+        if y2 < 0: y2 = 0
+        if y0 >= height: y0 = height - 1
+        if y1 >= height: y1 = height - 1
+        if y2 >= height: y2 = height - 1
+
+        return x0, y0, x1, y1, x2, y2
+
+    @staticmethod
     @micropython.native
-    def directVerts(pos, cam, verts_out, color_out, depth_out, count, tris_data, normals, colors):
+    def directVerts(px, py, pz, cam, verts_out, color_out, depth_out, count, tris_data, normals, colors):
         global triID, cosX, cW, cH, sinY, cosY, sinX, cosX, forwardX, forwardY, forwardZ
         cCount = 0
         
         cx, cy, cz = cam.x, cam.y, cam.z
         fov, near, far = cam.fov, cam.near, cam.far
-        
-        vP0, vP1, vP2 = lib.FMath.TO_FIXED_BITS(pos[0]), lib.FMath.TO_FIXED_BITS(pos[1]), lib.FMath.TO_FIXED_BITS(pos[2])
-        for triIDX, tri in enumerate(tris_data):
+        for i in range(len(tris_data) // 3):
             if triID >= lib.MAX_TRIS or (count + cCount) >= lib.MAX_TRIS: break
-            v0, v1, v2 = tri
+            tID = i * 3
+            v0 = tris_data[tID]
+            v1 = tris_data[tID + 1]
+            v2 = tris_data[tID + 2]
             
-            r0 = Render.worldToCam(cx, cy, cz, v0[0] + vP0, v0[1] + vP1, v0[2] + vP2, sinX, sinY, cosX, cosY)
-            r1 = Render.worldToCam(cx, cy, cz, v1[0] + vP0, v1[1] + vP1, v1[2] + vP2, sinX, sinY, cosX, cosY)
-            r2 = Render.worldToCam(cx, cy, cz, v2[0] + vP0, v2[1] + vP1, v2[2] + vP2, sinX, sinY, cosX, cosY)
+            r0 = Render.worldToCam(cx, cy, cz, v0[0] + px, v0[1] + py, v0[2] + pz, sinX, sinY, cosX, cosY)
+            r1 = Render.worldToCam(cx, cy, cz, v1[0] + px, v1[1] + py, v1[2] + pz, sinX, sinY, cosX, cosY)
+            r2 = Render.worldToCam(cx, cy, cz, v2[0] + px, v2[1] + py, v2[2] + pz, sinX, sinY, cosX, cosY)
             if r0 is None or r1 is None or r2 is None: continue
             
-            nx, ny, nz = normals[triIDX]
+            nx, ny, nz = normals[i]
             dot = (lib.FMath.FIXED_MUL(nx, cam.norm_x) + lib.FMath.FIXED_MUL(ny, cam.norm_y) + lib.FMath.FIXED_MUL(nz, cam.norm_z))
             if dot > 0: continue
             
@@ -299,14 +323,16 @@ class Render:
     
             if Render.checkRend(*p0, *p1, *p2) != 0: continue
 
+            x0, y0, x1, y1, x2, y2 = Render.checkBounds(*p0, *p1, *p2)
+
             o = triID * 6
-            verts_out[o]     = p0[0]
-            verts_out[o + 1] = p0[1]
-            verts_out[o + 2] = p1[0]
-            verts_out[o + 3] = p1[1]
-            verts_out[o + 4] = p2[0]
-            verts_out[o + 5] = p2[1]
-            color_out[triID] = colors[triIDX]
+            verts_out[o]     = x0
+            verts_out[o + 1] = y0
+            verts_out[o + 2] = x1
+            verts_out[o + 3] = y1
+            verts_out[o + 4] = x2
+            verts_out[o + 5] = y2
+            color_out[triID] = colors[i]
 
             newCount = (cCount + count) * 3
             depth_out[newCount] = lib.MUL_OPP(r0[2] + r1[2] + r2[2], 3)
@@ -342,41 +368,112 @@ class Render:
         return 1
     
     @staticmethod
-    @micropython.native
-    def customTri(x0, y0, x1, y1, x2, y2, color, fill):
-        if y1 < y0: x0, y0, x1, y1 = x1, y1, x0, y0
-        if y2 < y0: x0, y0, x2, y2 = x2, y2, x0, y0
-        if y2 < y1: x1, y1, x2, y2 = x2, y2, x1, y1
+    @micropython.viper
+    def customLine(x1:int, y1:int, x2:int, y2:int, color:int):
+        interlace:int = int(lib.interlace)
+        
+        buf = ptr8(lib.buf)
+
+        width:int = int(lib.width)
+        height:int = int(lib.height)
+
+        if x1 < 0 and x2 < 0: return
+        if x1 >= width and x2 >= width: return
+
+        if y1 < 0 and y2 < 0: return
+        if y1 >= height and y2 >= height: return
+
+        dx:int = x2 - x1
+        if dx < 0: dx = 0 - dx
+
+        sx:int = 0 - 1
+        if x1 < x2: sx = 1
+
+        dy:int = y2 - y1
+        if dy < 0: dy = 0 - dy
+        
+        dy = 0 - dy
+
+        sy:int = 0 - 1
+        if y1 < y2: sy = 1
+
+        err:int = dx + dy
+        while True:
+            if (y1 & 1) == interlace:
+                if x1 >= 0 and x1 < width and y1 >= 0 and y1 < height:
+                    page:int = (y1 >> 3) * width
+                    mask:int = 1 << (y1 & 7)
+                    inv:int = 255 - mask
+    
+                    if color: buf[page + x1] |= mask
+                    else: buf[page + x1] &= inv
+    
+            if x1 == x2 and y1 == y2: break
+
+            err2:int = err << 1
+
+            if err2 >= dy:
+                err += dy
+                x1 += sx
+
+            if err2 <= dx:
+                err += dx
+                y1 += sy
+
+    @staticmethod
+    @micropython.viper
+    def customTri(x0:int, y0:int, x1:int, y1:int, x2:int, y2:int, color:int):
+        if y1 < y0:
+            tx:int = x0
+            ty:int = y0
+            x0 = x1
+            y0 = y1
+            x1 = tx
+            y1 = ty
+        if y2 < y0:
+            tx:int = x0
+            ty:int = y0
+            x0 = x2
+            y0 = y2
+            x2 = tx
+            y2 = ty
+        if y2 < y1:
+            tx:int = x1
+            ty:int = y1
+            x1 = x2
+            y1 = y2
+            x2 = tx
+            y2 = ty
     
         if y0 == y2: return
     
-        FP = 8
-        scale = 1 << FP
+        scale:int = int(256)
     
-        dy02 = y2 - y0
-        dy01 = y1 - y0
-        dy12 = y2 - y1
+        dy02:int = int(y2 - y0)
+        dy01:int = int(y1 - y0)
+        dy12:int = int(y2 - y1)
     
-        dx02 = lib.MUL_OPP((x2 - x0) * scale, dy02) if dy02 != 0 else 0
-        dx01 = lib.MUL_OPP((x1 - x0) * scale, dy01) if dy01 != 0 else 0
-        dx12 = lib.MUL_OPP((x2 - x1) * scale, dy12) if dy12 != 0 else 0
+        dx02:int = int(lib.MUL_OPP((x2 - x0) * scale, dy02)) if dy02 != 0 else 0
+        dx01:int = int(lib.MUL_OPP((x1 - x0) * scale, dy01)) if dy01 != 0 else 0
+        dx12:int = int(lib.MUL_OPP((x2 - x1) * scale, dy12)) if dy12 != 0 else 0
     
-        interlace = lib.interlace
-        xA = x0 * scale
-        xB = x0 * scale
-    
-        y = y0
+        interlace:int = int(lib.interlace)
+        height:int = int(lib.height)
+
+        xA:int = int(x0 * scale)
+        xB:int = int(x0 * scale)
+        y:int = y0
+
         while y < y1:
-            if 0 <= y < lib.height and (y & 1) == interlace:
-                xa = xA >> FP
-                xb = xB >> FP
-                if xa > xb: xa, xb = xb, xa
+            if 0 <= y < height and (y & 1) == interlace:
+                xa:int = int(xA >> 8)
+                xb:int = int(xB >> 8)
+                if xa > xb:
+                    tmp:int = xa
+                    xa = xb
+                    xb = tmp
     
-                if fill:
-                    Render.h_dither_line(y, xa, xb + 1, color)
-                else:
-                    Render.plotPixel(xa, y, color)
-                    Render.plotPixel(xb, y, color)
+                Render.h_dither_line(y, xa, xb + 1, color)
     
             xA += dx02
             xB += dx01
@@ -385,45 +482,91 @@ class Render:
         xB = x1 * scale
     
         while y < y2:
-            if 0 <= y < lib.height and (y & 1) == interlace:
-                xa = xA >> FP
-                xb = xB >> FP
-                if xa > xb: xa, xb = xb, xa
+            if 0 <= y < height and (y & 1) == interlace:
+                xa:int = int(xA >> 8)
+                xb:int = int(xB >> 8)
+                if xa > xb:
+                    tmp:int = xa
+                    xa = xb
+                    xb = tmp
     
-                if fill:
-                    Render.h_dither_line(y, xa, xb + 1, color)
-                else:
-                    Render.plotPixel(xa, y, color)
-                    Render.plotPixel(xb, y, color)
+                Render.h_dither_line(y, xa, xb + 1, color)
     
             xA += dx02
             xB += dx12
             y += 1
     
     @staticmethod
-    @micropython.native
-    def renderWorld(verts, sprt, color, depth, count):
+    @micropython.viper
+    def setupTris(verts, o:int, color:int, check:bool) -> int:
+        fillCount:int = 0
+
+        o0:int = o
+        o1:int = o + 1
+        o2:int = o + 2
+        o3:int = o + 3
+        o4:int = o + 4
+        o5:int = o + 5
+
+        x0:int = int(verts[o0])
+        y0:int = int(verts[o1])
+        x1:int = int(verts[o2])
+        y1:int = int(verts[o3])
+        x2:int = int(verts[o4])
+        y2:int = int(verts[o5])
+
+        if check:
+            if int(z) <= 2200 and int(triIndex) >= int(fillStart):
+                Render.customTri(x0, y0, x1, y1, x2, y2, color)
+                fillCount += 1
+            else:
+                if color > 1: color = 1
+                elif color < 0: color = 0
+                Render.customLine(x0, y0, x1, y1, color)
+                Render.customLine(x1, y1, x2, y2, color)
+                Render.customLine(x2, y2, x0, y0, color)
+        else:
+            Render.customTri(x0, y0, x1, y1, x2, y2, color)
+            fillCount += 1
+
+        return fillCount
+    
+    @staticmethod
+    @micropython.viper
+    def renderWorld(verts, sprt, color, depth, count:int, check:bool):
         global triID, sprtID
         if (count <= 0): return
         if (count > 1): Render.insertion_sort(depth, count)
+
+        triCount:int = 0
+        for i in range(count):
+            d:int = int(i * 3)
+
+            if int(depth[d + 1]) == 0: triCount += 1
+        
+        fillStart:int = triCount >> 1
+
+        triIndex:int = 0
+        filledCount:int = 0
         
         for i in range(count):
-            d = i * 3
+            d:int = int(i * 3)
 
-            z      = depth[d]
-            dState = depth[d + 1]
-            dID    = depth[d + 2]
+            z:int      = int(depth[d])
+            dState:int = int(depth[d + 1])
+            dID:int    = int(depth[d + 2])
             
-            if (dState == -1): 
-                break
+            if (dState == -1): break
             elif (dState == 0):
-                o = dID * 6
-                Render.customTri(verts[o], verts[o + 1], verts[o + 2], verts[o + 3], verts[o + 4], verts[o + 5], color[dID], True)
+                o:int = int(dID * 6)
+                filledCount += int(Render.setupTris(verts, o, color[dID], check))
+                triIndex += 1
             elif (dState == 1):
-                pos = sprt[dID]
-                if pos is None: continue
-                Render.fillRect(pos[0] - 5, pos[1] - 5, 10, 10, 1)
-                
+                x:int = int(sprt[dID][0])
+                y:int = int(sprt[dID][1])
+                if x and y: continue
+                Render.fillRect(x - 5, y - 5, 10, 10, 1)
+        
         sprtID = 0
         triID  = 0
     

@@ -104,3 +104,10 @@ class FMath:
         for i in range(TABLE_SIZE_LUT):
             if i == 0: DIV_LUT[i] = 0
             else: DIV_LUT[i] = int(FP16x16_ONE // i)
+    
+    @staticmethod
+    def FLOOR_DIV(a, b):
+        if b == 0: return 0
+
+        q = a // b
+        return q
