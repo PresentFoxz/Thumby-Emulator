@@ -9,13 +9,13 @@ import library as lib
 
 SEED = 123456789
 
-BLOCK_X  = 2
+BLOCK_X  = 4
 BLOCK_Y  = 7
-BLOCK_Z  = 2
+BLOCK_Z  = 4
 CHUNK_SIZE   = (BLOCK_X * BLOCK_Y * BLOCK_Z)
 
-CHUNK_X = 1
-CHUNK_Z = 1
+CHUNK_X = 2
+CHUNK_Z = 2
 
 RANGE_X = ((CHUNK_X * 2) + 1)
 RANGE_Z = ((CHUNK_Z * 2) + 1)
@@ -40,47 +40,62 @@ blockFace = [
     [0, 0, -1], [0, 0, 1]
 ]
 
-@micropython.native
-def getBlockIndex(x, y, z):
+@micropython.viper
+def getBlock(chunk, i:int) -> int:
+    data = ptr8(chunk)
+    return int(data[i])
+
+@micropython.viper
+def setBlock(chunk, i:int, value:int): chunk[i] = value
+
+@micropython.viper
+def getBlockIndex(x:int, y:int, z:int) -> int:
+    BX:int = int(BLOCK_X)
+    BY:int = int(BLOCK_Y)
+    BZ:int = int(BLOCK_Z)
+
     if x < 0 or y < 0 or z < 0: return -1
-    if x >= BLOCK_X or y >= BLOCK_Y or z >= BLOCK_Z: return -1
-    return x + y * BLOCK_X + z * BLOCK_X * BLOCK_Y
+    if x >= BX or y >= BY or z >= BZ: return -1
+    return x + y * BX + z * BX * BY
 
 @micropython.native
 def getVoxelSafe(cx, cz, x, y, z):
     idx = getBlockIndex(x, y, z)
-    if (idx < 0): return False
+    if idx < 0:
+        return False
 
     for i in range(CHUNK_AMT):
         if chunkPos[i][0] == cx and chunkPos[i][1] == cz:
-            return chunkData[i][idx] != 0
+            return getBlock(chunkData[i], idx) != 0
+
     return False
 
 @micropython.native
-def block_exists(chunkID, nx, ny, nz):
-    newChunk = chunkID
-    blockID = getBlockIndex(nx, ny, nz)
+def block_exists(chunkID:int, nx:int, ny:int, nz:int) -> bool:
+    newChunk:int = int(chunkID)
+    blockID:int = int(getBlockIndex(nx, ny, nz))
 
-    if (blockID != -1): return chunkData[newChunk][blockID] != 0
+    if int(blockID) >= 0:
+        return bool(getBlock(chunkData[newChunk], int(blockID)) != 0)
 
-    cX = chunkPos[newChunk][0]
-    cZ = chunkPos[newChunk][1]
+    cX:int = int(chunkPos[newChunk][0])
+    cZ:int = int(chunkPos[newChunk][1])
 
     if (nx < 0):
         cX -= 1
-        nx = BLOCK_X - 1
+        nx = int(BLOCK_X - 1)
     elif (nx >= BLOCK_X):
         cX += 1
         nx = 0
     
     if (nz < 0):
         cZ -= 1
-        nz = BLOCK_Z - 1
+        nz = int(BLOCK_Z - 1)
     elif (nz >= BLOCK_Z):
         cZ += 1
         nz = 0
     
-    return getVoxelSafe(cX, cZ, nx, ny, nz)
+    return bool(getVoxelSafe(cX, cZ, nx, ny, nz))
 
 @micropython.viper
 def getChunk(x:int, z:int):
@@ -90,9 +105,11 @@ def getChunk(x:int, z:int):
     return (cx, cz)
 
 @micropython.native
-def createData(idx):
+def createData(idx, cx, cz):
+    random.seed(SEED + (cx * 100) + (cz * 100))
     chunk = chunkData[idx]
-    for i in range(len(chunk)):
+
+    for i in range(CHUNK_SIZE):
         chunk[i] = random.randint(0, 1)
 
 @micropython.viper
@@ -117,10 +134,6 @@ def checkDist(x:int, y:int, z:int, cx:int, cy:int, cz:int, fx:int, fy:int, fz:in
 @micropython.native
 def createWorld(models, idx, camX, camY, camZ, fx, fy, fz):
     chunk = chunkData[idx]
-    
-    cx = chunkPos[idx][0]
-    cz = chunkPos[idx][1]
-    random.seed(SEED + (cx * 100) + (cz * 100))
 
     verts = []
     tris  = []
@@ -131,40 +144,38 @@ def createWorld(models, idx, camX, camY, camZ, fx, fy, fz):
     normal_data = []
     
     visible = [False] * 6
-    cX, cY, cZ = BLOCK_X, BLOCK_Y, BLOCK_Z
-    for i in range(len(chunk)):
-        data = chunk[i]
-        if (data == 0): continue
-        
-        modelIndex = (data - 1)
-        if modelIndex >= len(models): continue
-        
-        model  = models[modelIndex]
-        verts  = model["verts"]
-        tris   = model["tris"]
-        normals = model["normal"]
-        color  = model["color"]
-        
-        x = (i % cX)
-        y = ((i // cX) % cY)
-        z = (i // (cX * cY))
+    for i in range(CHUNK_SIZE):
+        data = getBlock(chunk, i)
+        if data == 0: continue
 
-        if checkDist(x, y, z, camX, camY, camZ, fx, fy, fz, idx, 15): continue
-        
+        modelIndex = data - 1
+        if modelIndex >= len(models): continue
+
+        model   = models[modelIndex]
+        verts   = model["verts"]
+        tris    = model["tris"]
+        normals = model["normal"]
+        color   = model["color"]
+
+        x = i % BLOCK_X
+        y = (i // BLOCK_X) % BLOCK_Y
+        z = i // (BLOCK_X * BLOCK_Y)
+
+        if checkDist(x, y, z, camX, camY, camZ, fx, fy, fz, idx, 30): continue
+
         xPos = lib.FMath.TO_FIXED_BITS(x)
         yPos = lib.FMath.TO_FIXED_BITS(y)
         zPos = lib.FMath.TO_FIXED_BITS(z)
 
         for f in range(0, len(tris), 2):
-            face = blockFace[f//2]
-            
-            nx, ny, nz = x + face[0], y + face[1], z + face[2]
-            if block_exists(idx, nx, ny, nz): continue
+            face = blockFace[f // 2]
 
-            blockID = getBlockIndex(nx, ny, nz)
-            if blockID != -1:
-                if chunk[blockID] >= 1:
-                    continue
+            nx = x + face[0]
+            ny = y + face[1]
+            nz = z + face[2]
+
+            if block_exists(idx, nx, ny, nz):
+                continue
             
             t0, t1, t2 = tris[f]
             t3, t4, t5 = tris[f+1]

@@ -14,9 +14,9 @@ class Ptr8:
         self.data[i] = v & 0xFF
 
 
-def ptr8(obj):
-    return Ptr8(obj)
+def ptr8(obj): return Ptr8(obj)
 
+screenScale = 1
 inputState = 1
 buttonInputs = [
     [
@@ -92,11 +92,9 @@ def createInputSeries(file_name):
 
 pygame.mixer.init()
 
-def ticks_ms():
-    return int(time.perf_counter() * 1000)
+def ticks_ms(): return int(time.perf_counter() * 1000)
 
-def ticks_diff(new, old):
-    return new - old
+def ticks_diff(new, old): return new - old
 
 class Timer:
     ONE_SHOT = 0

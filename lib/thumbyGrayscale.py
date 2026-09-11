@@ -1,5 +1,6 @@
 import pygame
 import os
+import thumbyLibrary as customLib
 
 GRAY = [0, 255, 85, 170]
 
@@ -36,13 +37,15 @@ class Sprite:
         self.bitmap = self.bitmapSource[start:end]
 
 
-class display:
+class Display:
     WIDTH = 72
     HEIGHT = 40
 
     def __init__(self):
-        self.scale = 8
+        self.scale = customLib.screenScale
 
+        self.display = self
+        
         self.buffer = bytearray(360)
         self.shading = bytearray(360)
         
@@ -205,4 +208,4 @@ class display:
         pygame.display.flip()
         self.clock.tick(self.fps)
 
-display = display()
+display = Display()

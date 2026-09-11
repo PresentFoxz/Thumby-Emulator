@@ -16,9 +16,18 @@ sinY, cosY, sinX, cosX = None, None, None, None
 
 class Entities:
     def __init__(self, x, y, z, rx, ry, rz, sx, sy, sz, idx):
-        self.pos  = [x, y, z]
-        self.rot  = [rx, ry, rz]
-        self.size = [sx, sy, sz]
+        self.x = lib.FMath.TO_FIXED_BITS(x)
+        self.y = lib.FMath.TO_FIXED_BITS(y)
+        self.z = lib.FMath.TO_FIXED_BITS(z)
+        
+        self.rx = lib.FMath.TO_FIXED_BITS(rx)
+        self.ry = lib.FMath.TO_FIXED_BITS(ry)
+        self.rz = lib.FMath.TO_FIXED_BITS(rz)
+        
+        self.sx = lib.FMath.TO_FIXED_BITS(sx)
+        self.sy = lib.FMath.TO_FIXED_BITS(sy)
+        self.sz = lib.FMath.TO_FIXED_BITS(sz)
+
         self.idx  = idx
 
 class Camera:
@@ -215,11 +224,22 @@ class Render:
         row  = page * width
     
         buf = ptr8(lib.buf)
+        shd = ptr8(lib.shd)
         inv = 255 - mask
         
         for x in range(x_start, x_end):
-            if color: buf[row + x] |= mask
-            else: buf[row + x] &= inv
+            if color == 1:
+                buf[row + x] |= mask
+                shd[row + x] &= inv
+            elif color == 2:
+                buf[row + x] &= inv
+                shd[row + x] |= mask
+            elif color == 3:
+                buf[row + x] |= mask
+                shd[row + x] |= mask
+            else:
+                buf[row + x] &= inv
+                shd[row + x] &= inv
     
     @staticmethod
     @micropython.native
@@ -473,7 +493,7 @@ class Render:
                     xa = xb
                     xb = tmp
     
-                Render.h_dither_line(y, xa, xb + 1, color)
+                Render.h_line(y, xa, xb + 1, color)
     
             xA += dx02
             xB += dx01
@@ -490,7 +510,7 @@ class Render:
                     xa = xb
                     xb = tmp
     
-                Render.h_dither_line(y, xa, xb + 1, color)
+                Render.h_line(y, xa, xb + 1, color)
     
             xA += dx02
             xB += dx12

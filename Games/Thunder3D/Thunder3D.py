@@ -1,4 +1,3 @@
-from thumbyGraphics import display as gfx
 import thumbyButton as btn
 import sys
 import random
@@ -6,15 +5,20 @@ import micropython
 from array import array
 
 modulePath = "/Module/Foxgine"
-modelPath  = "/Games/Belory"
+modelPath  = "/Games/Thunder3D"
 sys.path.append(modulePath)
 from classes import Entities, Camera, Render
 import library as lib
+from thumbyGrayscale import display as gfx
+from thumbyGrayscale import Sprite
 
 sys.path.append(modelPath)
 import chunkLib
+import cover
 
-gfx.setFPS(20)
+title = Sprite(72, 40, (cover.b0, cover.b1), 0, 0)
+
+gfx.setFPS(15)
 sprtPos = [0.5, 1.2, 0.5]
 cam = None
 plr = None
@@ -42,7 +46,7 @@ def initGame():
     blockModels.clear()
     entIndex.clear()
     
-    cam = Camera(0.0, 0.0, -4.0, 0.0, 0.0, 0.0, 0.001, 20.0, 1.01, 0.15, 60.0)
+    cam = Camera(0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.001, 20.0, 1.01, 0.15, 60.0)
     # plr = Entities(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0)
     # entIndex.append(Entities(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0))
 
@@ -73,15 +77,27 @@ def addWorld(worldVerts, worldColors, depthBin, count, tris, normals, color, x, 
 def main():
     global worldVerts, worldColors, depthBin, vertCount, sprtCount, fullCount, cam, plr, entIndex, lastChunk, currChunk
     
+    while True:
+        gfx.fill(0)
+        gfx.drawSprite(title)
+        
+        if btn.buttonA.justPressed(): break
+    
+        gfx.update()
+    
+    worldChunkX = 0
+    worldChunkZ = 0
+
     lib.FMath.init_tables()
     chunkLib.chunkSurroundings()
+    lib.buf = gfx.display.buffer
+    lib.shd = gfx.display.shading
     try:
         initGame()
 
+        lib.MAX_TRIS = 600
         for i in range(chunkLib.CHUNK_AMT):
-            chunkLib.createData(i)
-            world = chunkLib.createWorld(blockModels, i, 0, 0, 0, 0, 0, 0)
-            lib.MAX_TRIS += (len(world["tris"])) // 3
+            chunkLib.createData(i, worldChunkX + chunkLib.chunkPos[i][0], worldChunkZ + chunkLib.chunkPos[i][1])
     
         currChunk = (0, 0)
         lastChunk = currChunk
@@ -95,7 +111,6 @@ def main():
 
     chunkLib.RUNNING = True
     while True:
-        lib.buf = gfx.display.buffer
         Render.fill(0)
         
         vertCount = 0
@@ -105,9 +120,21 @@ def main():
         cam.movement(btn)
         cam.updateFunctions()
 
+        # print(f"Player Pos: [ {cam.x}, {cam.y}, {cam.z} ]")
         currChunk = chunkLib.getChunk(cam.x, cam.z)
         if currChunk[0] != lastChunk[0] or currChunk[1] != lastChunk[1]:
-            print(f"Current Chunk: {currChunk} | Last Chunk: {lastChunk}")
+            worldChunkX += currChunk[0]
+            worldChunkZ += currChunk[1]
+
+            cam.x -= currChunk[0] * chunkLib.BLOCK_X_FIXED
+            cam.z -= currChunk[1] * chunkLib.BLOCK_Z_FIXED
+
+            for i in range(chunkLib.CHUNK_AMT):
+                chunkLib.createData(i, worldChunkX + chunkLib.chunkPos[i][0], worldChunkZ + chunkLib.chunkPos[i][1])
+
+            print(f"World Chunk: [ {worldChunkX} | {worldChunkZ} ]")
+            
+            currChunk = (0, 0)
         
         # sprtCount += Render.setupSprite(sprtPos, None, cam, None, worldSprt, depthBin, fullCount)
         # fullCount = (vertCount + sprtCount)
@@ -116,8 +143,11 @@ def main():
         cy = int(lib.FMath.FROM_FIXED_BITS(cam.y))
         cz = int(lib.FMath.FROM_FIXED_BITS(cam.z))
         for i in range(chunkLib.CHUNK_AMT):
+            renderChunkX = chunkLib.chunkPos[i][0]
+            renderChunkZ = chunkLib.chunkPos[i][1]
+
             chunkVerts = chunkLib.createWorld(blockModels, i, cx, cy, cz, cam.norm_x, cam.norm_y, cam.norm_z)
-            added = addWorld(worldVerts, worldColors, depthBin, fullCount, chunkVerts["tris"], chunkVerts["normal"], chunkVerts["color"], int(chunkLib.chunkPos[i][0] * chunkLib.BLOCK_X), 0, int(chunkLib.chunkPos[i][1] * chunkLib.BLOCK_Z))
+            added = addWorld(worldVerts, worldColors, depthBin, fullCount, chunkVerts["tris"], chunkVerts["normal"], chunkVerts["color"], int(renderChunkX * chunkLib.BLOCK_X), 0, int(renderChunkZ * chunkLib.BLOCK_Z))
             vertCount += added
             fullCount = (vertCount + sprtCount)
         

@@ -47,10 +47,13 @@ def get_games():
             games.append(game_path)
     return games
 
-def load_game(game_file, input_type):
+def load_game(game_file, input_type, screen_size):
     game_dir = os.path.dirname(game_file)
 
     library.inputState = input_type
+
+    if screen_size == 0: library.screenScale = 4
+    else: library.screenScale = 1
 
     for path in (game_dir, LIB, SAVES, MODULES_DIR):
         if path not in sys.path:
@@ -87,4 +90,10 @@ while True:
     if input_type < 0 or input_type > 3:
         break
 
-    load_game(os.path.abspath(games[choice]), input_type)
+    print("\n0: Upscaled | 1: No-Upscale")
+    screen_size = int(input("Input Mode: "))
+
+    if screen_size < 0 or screen_size > 1:
+        break
+
+    load_game(os.path.abspath(games[choice]), input_type, screen_size)

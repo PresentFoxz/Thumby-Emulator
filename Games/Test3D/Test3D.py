@@ -1,4 +1,3 @@
-from thumbyGraphics import display as gfx
 import thumbyButton as btn
 import sys
 import random
@@ -6,10 +5,17 @@ import micropython
 from array import array
 
 modulePath = "/Module/Foxgine"
-modelPath  = "/Games/Belory"
+modelPath  = "/Games/Test3D"
 sys.path.append(modulePath)
 from classes import Entities, Camera, Render
 import library as lib
+from thumbyGrayscale import display as gfx
+from thumbyGrayscale import Sprite
+
+sys.path.append(modelPath)
+import cover
+
+title = Sprite(72, 40, (cover.b0, cover.b1), 0, 0)
 
 gfx.setFPS(20)
 sprtPos = [0.5, 1.2, 0.5]
@@ -76,7 +82,10 @@ def initGame():
     lib.MAX_TRIS = (len(loadedModel["tris"]) * 1)
     worldModels.append(convertTris(loadedModel))
 
-    worldVerts  = bytearray(lib.MAX_TRIS * 6)
+def initLists():
+    global worldVerts, depthBin, worldSprt, worldColors
+
+    worldVerts  = array("h", [0] * (lib.MAX_TRIS * 6))
     depthBin    = array("i", [0] * (lib.MAX_TRIS * 3))
     worldSprt   = [bytearray(2) for _ in range(lib.MAX_SPRT)]
     worldColors = bytearray(lib.MAX_TRIS)
@@ -91,11 +100,21 @@ def addWorld(worldVerts, worldColors, depthBin, count, tris, normals, color, x, 
 
 def main():
     global worldVerts, worldColors, depthBin, vertCount, sprtCount, fullCount, cam, plr, entIndex
-
+    
+    while True:
+        gfx.fill(0)
+        gfx.drawSprite(title)
+        
+        if btn.buttonA.justPressed(): break
+    
+        gfx.update()
+    
     lib.FMath.init_tables()
-    lib.buf = gfx.display.buffer
+    lib.buf = gfx.buffer
+    lib.shd = gfx.shading
     try:
         initGame()
+        initLists()
         print("Initalize Game")
     except Exception as e:
         print(f"Failed To Initalize: {e}")
@@ -103,7 +122,6 @@ def main():
 
     while True:
         Render.fill(0)
-        lib.buf = gfx.display.buffer
 
         vertCount = 0
         sprtCount = 0
@@ -119,7 +137,7 @@ def main():
             vertCount += addWorld(worldVerts, worldColors, depthBin, fullCount, model["tris"], model["normal"], model["color"], 0, 0, 0)
             fullCount = (vertCount + sprtCount)
         
-        Render.renderWorld(worldVerts, worldSprt, worldColors, depthBin, fullCount)
+        Render.renderWorld(worldVerts, worldSprt, worldColors, depthBin, fullCount, False)
         
         # print(f"FullCount: {fullCount} | VertCount: {vertCount} | SprtCount: {sprtCount}")
 

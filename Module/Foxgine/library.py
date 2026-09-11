@@ -24,6 +24,7 @@ EVEN_MASK = 0b01010101
 ODD_MASK  = 0b10101010
 
 buf    = None
+shd    = None
 width  = 72
 height = 40
 w_Half = width//2
@@ -63,16 +64,13 @@ def MUL_OPP(value, divisor): return (value * DIV_OPP(divisor)) >> 16
 
 class FMath:
     @staticmethod
-    def TO_FIXED_BITS(a):
-        return int(a * FP24x8_ONE)
+    def TO_FIXED_BITS(a): return int(a * FP24x8_ONE)
 
     @staticmethod
-    def FROM_FIXED_BITS(a):
-        return a * INV_FIXED
+    def FROM_FIXED_BITS(a): return a * INV_FIXED
         
     @staticmethod
-    def FIXED_MUL(a, b):
-        return (a * b) >> FIXED_BITS
+    def FIXED_MUL(a, b): return (a * b) >> FIXED_BITS
     
     @staticmethod
     def FIXED_DIV(a, b):
@@ -84,12 +82,10 @@ class FMath:
         return (fixed_angle >> FIXED_BITS) & 255
     
     @staticmethod
-    def FIXED_SIN(a):
-        return SIN_FIXED[a & (TABLE_SIZE-1)]
+    def FIXED_SIN(a): return SIN_FIXED[a & (TABLE_SIZE-1)]
     
     @staticmethod
-    def FIXED_COS(a):
-        return COS_FIXED[a & (TABLE_SIZE-1)]
+    def FIXED_COS(a): return COS_FIXED[a & (TABLE_SIZE-1)]
 
     @staticmethod
     def init_tables():

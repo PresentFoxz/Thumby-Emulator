@@ -1,7 +1,7 @@
 import pygame
 import os
 from thumbySprite import Sprite
-
+import thumbyLibrary as customLib
 
 class SSD1306_DUMMY:
     def __init__(self, width, height):
@@ -39,7 +39,7 @@ class Display:
     HEIGHT = 40
 
     def __init__(self):
-        self.scale = 8
+        self.scale = customLib.screenScale
 
         self.display = SSD1306_DUMMY(self.WIDTH, self.HEIGHT)
 

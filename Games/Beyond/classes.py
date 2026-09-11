@@ -61,7 +61,6 @@ class Entities:
     def movement(self, btn):
         if btn.buttonB.pressed():
             self.plrState ^= 1
-
         
         if btn.buttonL.pressed():
             self.vx -= self.acc
