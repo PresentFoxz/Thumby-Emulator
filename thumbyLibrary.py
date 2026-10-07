@@ -11,10 +11,34 @@ class Ptr8:
         return self.data[i]
 
     def __setitem__(self, i, v):
-        self.data[i] = v & 0xFF
+        self.data[i] = v
+
+
+class Ptr16:
+    def __init__(self, data):
+        self.data = data
+
+    def __getitem__(self, i):
+        return self.data[i]
+
+    def __setitem__(self, i, v):
+        self.data[i] = v
+
+
+class Ptr32:
+    def __init__(self, data):
+        self.data = data
+
+    def __getitem__(self, i):
+        return self.data[i]
+
+    def __setitem__(self, i, v):
+        self.data[i] = v
 
 
 def ptr8(obj): return Ptr8(obj)
+def ptr16(obj): return Ptr16(obj)
+def ptr32(obj): return Ptr32(obj)
 
 screenScale = 1
 inputState = 1

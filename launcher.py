@@ -7,6 +7,8 @@ import thumbyLibrary as library
 print(sys.executable)
 
 builtins.ptr8 = library.ptr8
+builtins.ptr16 = library.ptr16
+builtins.ptr32 = library.ptr32
 
 BASE        = os.path.dirname(__file__)
 LIB         = os.path.join(BASE, "lib")

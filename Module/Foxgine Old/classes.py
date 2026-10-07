@@ -149,66 +149,32 @@ class Render:
         return x2D >> lib.FIXED_BITS, y2D >> lib.FIXED_BITS
     
     @staticmethod
-    @micropython.viper
-    def insertion_sort(depths, count: int):
-        d = ptr32(depths)
-    
+    @micropython.native
+    def insertion_sort(depths, count):
         for i in range(1, count):
-            base = i * 2
+            base = i * 3
 
-            keyZ = int(d[base])
-            keyID = int(d[base + 1])
-    
-            pos = base - 2
+            keyZ     = depths[base]
+            keyState = depths[base + 1]
+            keyID    = depths[base + 2]
+            if keyState == -1: continue
+            
+            j = i - 1
+            while j >= 0:
+                jb = j * 3
+                if depths[jb] >= keyZ: break
 
-            while pos >= 0:
-                if int(d[pos]) >= keyZ:
-                    break
+                nb = (j + 1) * 3
 
-                d[pos + 3] = d[pos]
-                d[pos + 5] = d[pos + 1]
-
-                pos -= 2
-
-            pos += 2
-
-            d[pos] = keyZ
-            d[pos + 1] = keyID
-    
-    @staticmethod
-    @micropython.viper
-    def build_depth_buckets(depths, count:int, bucketHead, bucketNext):
-        d = ptr32(depths)
-        head = ptr16(bucketHead)
-        nextPtr = ptr16(bucketNext)
-    
-        bucketAmt:int = int(lib.DEPTH_BUCKETS)
-    
-        for i in range(bucketAmt):
-            head[i] = -1
-    
-        for i in range(count):
-            base:int = i << 1
-    
-            z:int = int(d[base])
-    
-            bucket:int = z >> 6
-    
-            if bucket < 0:
-                bucket = 0
-            elif bucket >= bucketAmt:
-                bucket = bucketAmt - 1
-    
-            nextPtr[i] = head[bucket]
-            head[bucket] = i
-    
-    @staticmethod
-    @micropython.viper
-    def clear_depth_buckets(bucketHead):
-        head = ptr16(bucketHead)
-    
-        for i in range(int(lib.DEPTH_BUCKETS)):
-            head[i] = -1
+                depths[nb]     = depths[jb]
+                depths[nb + 1] = depths[jb + 1]
+                depths[nb + 2] = depths[jb + 2]
+                j -= 1
+            
+            dst = (j + 1) * 3
+            depths[dst]     = keyZ
+            depths[dst + 1] = keyState
+            depths[dst + 2] = keyID
     
     @staticmethod
     @micropython.viper
@@ -388,14 +354,38 @@ class Render:
             verts_out[o + 5] = y2
             color_out[triID] = colors[i]
 
-            newCount = (cCount + count) * 2
+            newCount = (cCount + count) * 3
             depth_out[newCount] = lib.MUL_OPP(r0[2] + r1[2] + r2[2], 3)
-            depth_out[newCount + 1] = triID
+            depth_out[newCount + 1] = 0
+            depth_out[newCount + 2] = triID
 
             cCount += 1
             triID += 1
     
         return cCount
+    
+    @staticmethod
+    @micropython.native
+    def setupSprite(pos, size, cam, sprite, sprt_out, depth_out, count):
+        global sprtID, sinY, cosY, sinX, cosX, cW, cH
+        if count >= lib.MAX_TRIS: return 0
+        
+        vP0, vP1, vP2 = lib.FMath.TO_FIXED_BITS(pos[0]), lib.FMath.TO_FIXED_BITS(pos[1]), lib.FMath.TO_FIXED_BITS(pos[2])
+        
+        r = Render.worldToCam(cam.x, cam.y, cam.z, vP0, vP1, vP2, sinX, sinY, cosX, cosY)
+        if r is None: return 0
+        
+        p = Render.projectPoint(r, cW, cH, cam.fov, cam.near, cam.far)
+        if p is None: return 0
+        
+        if p[0] < 0 or p[0] >= lib.width: return 0
+        if p[1] < 0 or p[1] >= lib.height: return 0
+    
+        sprt_out[sprtID]  = [int(p[0]), int(p[1])]
+        depth_out[count] = [int(r[2]), 1, sprtID]
+        sprtID += 1
+        
+        return 1
     
     @staticmethod
     @micropython.viper
@@ -563,40 +553,42 @@ class Render:
     
     @staticmethod
     @micropython.viper
-    def renderWorld(verts, color, depth, count:int, check:bool, bucketHead, bucketNext):
-        global triID
+    def renderWorld(verts, sprt, color, depth, count:int, check:bool):
+        global triID, sprtID
+        if (count <= 0): return
+        if (count > 1): Render.insertion_sort(depth, count)
 
-        if count <= 0:
-            return
+        triCount:int = 0
+        for i in range(count):
+            d:int = int(i * 3)
 
-        Render.build_depth_buckets(depth, count, bucketHead, bucketNext)
+            if int(depth[d + 1]) == 0: triCount += 1
+        
+        fillStart:int = triCount >> 1
 
-        d = ptr32(depth)
-        head = ptr16(bucketHead)
-        nextPtr = ptr16(bucketNext)
+        triIndex:int = 0
+        filledCount:int = 0
+        
+        for i in range(count):
+            d:int = int(i * 3)
 
-        EMPTY:int = 65535
-
-        bucket:int = int(lib.DEPTH_BUCKETS) - 1
-
-        while bucket >= 0:
-            entry:int = int(head[bucket])
-
-            while entry != EMPTY:
-                di:int = entry << 1
-
-                z:int = int(d[di])
-                dID:int = int(d[di + 1])
-
-                o:int = dID * 6
-
-                Render.setupTris(verts, o, color[dID], check)
-
-                entry = int(nextPtr[entry])
-
-            bucket -= 1
-
-        triID = 0
+            z:int      = int(depth[d])
+            dState:int = int(depth[d + 1])
+            dID:int    = int(depth[d + 2])
+            
+            if (dState == -1): break
+            elif (dState == 0):
+                o:int = int(dID * 6)
+                filledCount += int(Render.setupTris(verts, o, color[dID], check))
+                triIndex += 1
+            elif (dState == 1):
+                x:int = int(sprt[dID][0])
+                y:int = int(sprt[dID][1])
+                if x and y: continue
+                Render.fillRect(x - 5, y - 5, 10, 10, 1)
+        
+        sprtID = 0
+        triID  = 0
     
     @staticmethod
     def loadOBJ(filename, invert):
