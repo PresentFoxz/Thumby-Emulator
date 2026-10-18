@@ -1,9 +1,9 @@
 import thumbyButton
-import thumbyGraphics
+import thumbyGraphics as tGraph
 import thumbyAudio
 import thumbySaves
 
-display = thumbyGraphics.thumbyGraphics()
+display = tGraph.thumbyGraphics()
 audio = thumbyAudio.Audio()
 saveData = thumbySaves.thumbySaves()
 

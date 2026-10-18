@@ -3,6 +3,10 @@ import sys
 import builtins
 import importlib.util
 import thumbyLibrary as library
+import traceback
+import faulthandler
+
+faulthandler.enable()
 
 print(sys.executable)
 
@@ -17,6 +21,22 @@ GAMES_DIR   = os.path.join(BASE, "Games")
 MODULES_DIR = os.path.join(BASE, "Module")
 
 _real_open = builtins.open
+_real_mkdir = os.mkdir
+_real_stat = os.stat
+
+def virtual_path(path):
+    if isinstance(path, str) and path.startswith("/"):
+        return os.path.join(BASE, path.lstrip("/"))
+    return path
+
+def thumby_mkdir(path, *args, **kwargs):
+    return _real_mkdir(virtual_path(path), *args, **kwargs)
+
+def thumby_stat(path, *args, **kwargs):
+    return _real_stat(virtual_path(path), *args, **kwargs)
+
+os.mkdir = thumby_mkdir
+os.stat = thumby_stat
 
 class ThumbySysPath(list):
     def _convert(self, path):
@@ -53,21 +73,34 @@ def load_game(game_file, input_type, screen_size):
     game_dir = os.path.dirname(game_file)
 
     library.inputState = input_type
-
-    if screen_size == 0: library.screenScale = 4
-    else: library.screenScale = 1
+    library.screenScale = 4 if screen_size == 0 else 1
 
     for path in (game_dir, LIB, SAVES, MODULES_DIR):
         if path not in sys.path:
             sys.path.insert(0, path)
 
-    spec = importlib.util.spec_from_file_location("game", game_file)
-    module = importlib.util.module_from_spec(spec)
+    try:
+        faulthandler.dump_traceback_later(10, repeat=True)
 
-    spec.loader.exec_module(module)
+        spec = importlib.util.spec_from_file_location("game", game_file)
+        module = importlib.util.module_from_spec(spec)
 
-    if hasattr(module, "main"):
-        module.main()
+        print(f"Loading: {game_file}", flush=True)
+
+        spec.loader.exec_module(module)
+
+        print("Game loaded successfully", flush=True)
+
+        if hasattr(module, "main"):
+            print("Starting main()", flush=True)
+            module.main()
+
+    except Exception:
+        print("\n===== GAME ERROR =====")
+        traceback.print_exc()
+
+    finally:
+        faulthandler.cancel_dump_traceback_later()
 
 while True:
     games = get_games()

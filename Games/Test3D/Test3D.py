@@ -3,22 +3,22 @@ import sys
 import random
 import micropython
 from array import array
+import gc
 
 modulePath = "/Module/Foxgine"
-modelPath  = "/Games/Test3D"
+modelPath  = "/Games/Test3DBin"
 sys.path.append(modulePath)
+sys.path.append(modelPath)
+
 from classes import Entities, Camera, Render
 import library as lib
 from thumbyGrayscale import display as gfx
 from thumbyGrayscale import Sprite
-
-sys.path.append(modelPath)
 import cover
 
 title = Sprite(72, 40, (cover.b0, cover.b1), 0, 0)
 
 gfx.setFPS(20)
-sprtPos = [0.5, 1.2, 0.5]
 cam = None
 plr = None
 entIndex = []
@@ -28,11 +28,11 @@ entModel     = []
 
 worldVerts  = None
 depthBin    = None
-worldSprt   = None
+bucketHead  = None
+bucketNext  = None
 worldColors = None
 worldModels = None
 vertCount = 0
-sprtCount = 0
 fullCount = 0
 
 @micropython.native
@@ -67,7 +67,7 @@ def convertTris(model):
     return { "tris": tri_data, "normal": normal_data, "color": color_data }
 
 def initGame():
-    global cam, plr, entModel, worldVerts, depthBin, worldSprt, worldColors, worldModels
+    global cam, plr, entModel, worldVerts, depthBin, worldColors, worldModels
     
     entModel.clear()
     entIndex.clear()
@@ -83,11 +83,12 @@ def initGame():
     worldModels.append(convertTris(loadedModel))
 
 def initLists():
-    global worldVerts, depthBin, worldSprt, worldColors
-
+    global worldVerts, depthBin, bucketHead, bucketNext, worldColors
+    
     worldVerts  = array("h", [0] * (lib.MAX_TRIS * 6))
-    depthBin    = array("i", [0] * (lib.MAX_TRIS * 3))
-    worldSprt   = [bytearray(2) for _ in range(lib.MAX_SPRT)]
+    depthBin    = array("i", [0] * (lib.MAX_TRIS * 2))
+    bucketHead = array("h", [-1] * lib.DEPTH_BUCKETS)
+    bucketNext = array("h", [-1] * lib.MAX_TRIS)
     worldColors = bytearray(lib.MAX_TRIS)
 
 @micropython.native
@@ -99,7 +100,7 @@ def addWorld(worldVerts, worldColors, depthBin, count, tris, normals, color, x, 
     return count
 
 def main():
-    global worldVerts, worldColors, depthBin, vertCount, sprtCount, fullCount, cam, plr, entIndex
+    global worldVerts, worldColors, depthBin, vertCount, fullCount, cam, plr, entIndex
     
     while True:
         gfx.fill(0)
@@ -114,6 +115,10 @@ def main():
     lib.shd = gfx.shading
     try:
         initGame()
+        
+        lib.MAX_TRIS = 50
+        
+        gc.collect()
         initLists()
         print("Initalize Game")
     except Exception as e:
@@ -122,24 +127,19 @@ def main():
 
     while True:
         Render.fill(0)
+        Render.clear_depth_buckets(bucketHead)
 
         vertCount = 0
-        sprtCount = 0
         fullCount = 0
         
         cam.movement(btn)
         cam.updateFunctions()
         
-        # sprtCount += Render.setupSprite(sprtPos, None, cam, None, worldSprt, depthBin, fullCount)
-        # fullCount = (vertCount + sprtCount)
-        
         for model in worldModels:
             vertCount += addWorld(worldVerts, worldColors, depthBin, fullCount, model["tris"], model["normal"], model["color"], 0, 0, 0)
-            fullCount = (vertCount + sprtCount)
+            fullCount = vertCount
         
-        Render.renderWorld(worldVerts, worldSprt, worldColors, depthBin, fullCount, False)
-        
-        # print(f"FullCount: {fullCount} | VertCount: {vertCount} | SprtCount: {sprtCount}")
+        Render.renderWorld(worldVerts, worldColors, depthBin, fullCount, False, bucketHead, bucketNext)
 
         lib.interlace ^= 1
         gfx.update()

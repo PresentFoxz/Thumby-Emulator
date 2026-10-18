@@ -9,13 +9,13 @@ import library as lib
 
 SEED = 123456789
 
-BLOCK_X  = 4
+BLOCK_X  = 2
 BLOCK_Y  = 7
-BLOCK_Z  = 4
+BLOCK_Z  = 2
 CHUNK_SIZE   = (BLOCK_X * BLOCK_Y * BLOCK_Z)
 
-CHUNK_X = 2
-CHUNK_Z = 2
+CHUNK_X = 1
+CHUNK_Z = 1
 
 RANGE_X = ((CHUNK_X * 2) + 1)
 RANGE_Z = ((CHUNK_Z * 2) + 1)

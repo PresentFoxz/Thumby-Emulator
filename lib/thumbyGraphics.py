@@ -142,6 +142,38 @@ class Display:
         for yy in range(y, y + h):
             self.setPixel(x, yy, c)
             self.setPixel(x + w - 1, yy, c)
+    
+    def blit(self, bitmap, x, y, width, height, key=-1, mirrorX=0, mirrorY=0):
+        if width <= 0 or height <= 0:
+            return
+
+        pages = (height + 7) // 8
+        if len(bitmap) < width * pages:
+            raise ValueError("Bitmap data is too small")
+
+        for py in range(height):
+            dy = y + py
+            if dy < 0 or dy >= self.HEIGHT:
+                continue
+
+            sy = height - 1 - py if mirrorY else py
+
+            for px in range(width):
+                dx = x + px
+                if dx < 0 or dx >= self.WIDTH:
+                    continue
+
+                sx = width - 1 - px if mirrorX else px
+
+                i = sx + ((sy >> 3) * width)
+                bit = 1 << (sy & 7)
+
+                color = 1 if bitmap[i] & bit else 0
+
+                if color == key:
+                    continue
+
+                self.setPixel(dx, dy, color)
 
     def update(self):
         for e in pygame.event.get():

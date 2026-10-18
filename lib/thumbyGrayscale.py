@@ -70,18 +70,25 @@ class Display:
         self.fill(0)
 
     def setFont(self, fontFile, width, height, space):
+        newFont = open(fontFile, "rb")
+        
+        if hasattr(self, "textBitmapFile"):
+            self.textBitmapFile.close()
+
         self.textBitmapSource = fontFile
-        self.textBitmapFile = open(fontFile, "rb")
+        self.textBitmapFile = newFont
 
         self.textWidth = width
         self.textHeight = height
         self.textSpaceWidth = space
 
-        self.textBitmap = bytearray(self.textWidth)
+        self.textBitmap = bytearray(width)
 
-        self.textCharCount = (
-            os.stat(fontFile).st_size // self.textWidth
-        )
+        newFont.seek(0, 2)
+        fileSize = newFont.tell()
+        newFont.seek(0)
+
+        self.textCharCount = fileSize // width
     
     def drawText(self, stringToPrint, x, y, color):
         for char in str(stringToPrint):
@@ -176,6 +183,47 @@ class Display:
                     continue
 
                 self.setPixel(sprite.x + x, sprite.y + y, v)
+    
+    def blit(self, bitmap, x, y, width, height, key=-1, mirrorX=0, mirrorY=0):
+        if width <= 0 or height <= 0:
+            return
+
+        if isinstance(bitmap, (tuple, list)) and len(bitmap) == 2:
+            p0, p1 = bitmap
+        else:
+            p0, p1 = bitmap, None
+
+        pages = (height + 7) // 8
+        size = width * pages
+
+        if len(p0) < size or (p1 is not None and len(p1) < size):
+            raise ValueError("Bitmap data is too small")
+
+        for py in range(height):
+            dy = y + py
+            if dy < 0 or dy >= self.HEIGHT:
+                continue
+
+            sy = height - 1 - py if mirrorY else py
+
+            for px in range(width):
+                dx = x + px
+                if dx < 0 or dx >= self.WIDTH:
+                    continue
+
+                sx = width - 1 - px if mirrorX else px
+
+                i = sx + ((sy >> 3) * width)
+                bit = 1 << (sy & 7)
+
+                color = 1 if p0[i] & bit else 0
+                if p1 is not None and p1[i] & bit:
+                    color |= 2
+
+                if color == key:
+                    continue
+
+                self.setPixel(dx, dy, color)
 
     def update(self):
         for e in pygame.event.get():

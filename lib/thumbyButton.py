@@ -9,7 +9,9 @@ class thumbyButton:
     def pressed(self):
         if isinstance(self.key, bool):
             return self.key
-        
+
+        pygame.event.pump()
+
         keys = pygame.key.get_pressed()
         return bool(keys[self.key])
 

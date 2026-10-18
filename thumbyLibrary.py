@@ -166,5 +166,12 @@ class PWM:
         self._sound = self._make_square_wave(self._freq)
         self._channel = self._sound.play(-1)
 
+time.sleep_ms = lambda ms: time.sleep(ms / 1000)
+time.sleep_us = lambda us: time.sleep(us / 1000000)
+
+time.ticks = lambda: time.monotonic_ns() // 1000
+time.ticks_ms = lambda: time.monotonic_ns() // 1000000
+time.ticks_us = lambda: time.monotonic_ns() // 1000
+time.ticks_diff = lambda a, b: a - b
 
 swBuzzer = PWM()

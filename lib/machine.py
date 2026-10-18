@@ -3,8 +3,8 @@ import time
 class Timer:
     pass
 
-def freq():
-    return 125000000
+def freq(frequency):
+    return frequency or 125000000
 
 def reset():
     raise SystemExit
