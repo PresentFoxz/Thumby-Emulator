@@ -240,10 +240,8 @@ class Display:
                 bit = 1 << (y & 7)
 
                 v = 0
-                if self.buffer[i] & bit:
-                    v |= 1
-                if self.shading[i] & bit:
-                    v |= 2
+                if self.buffer[i] & bit: v |= 1
+                if self.shading[i] & bit: v |= 2
 
                 if v:
                     g = GRAY[v]
